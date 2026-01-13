@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Tiny Tactix</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+<style>
+body { margin:0; background:#0c1022; }
+</style>
+</head>
+<body>
+
+<script>
+const TILE=90, COLS=6, ROWS=4;
+let turn="player", selected=null, mapIndex=0;
+
+const MAPS=[
+ {player:[[0,1],[0,2]], ai:[[5,1],[5,2]]},
+ {player:[[0,0],[0,3]], ai:[[5,0],[5,3]]},
+ {player:[[1,1],[1,2]], ai:[[4,1],[4,2]]}
+];
+
+class Unit{
+ constructor(scene,x,y,type,owner){
+  this.scene=scene; this.x=x; this.y=y; this.owner=owner; this.type=type;
+  const s={tank:[8,0x4dabf7],dps:[5,0x51cf66],mage:[4,0xf06595]};
+  this.maxHp=s[type][0]; this.hp=this.maxHp;
+  this.sprite=scene.add.circle(x*TILE+45,y*TILE+45,30,s[type][1]);
+  this.bg=scene.add.rectangle(this.sprite.x,this.sprite.y-36,44,6,0x000);
+  this.bar=scene.add.rectangle(this.sprite.x-22,this.sprite.y-36,44,6,0x0f0).setOrigin(0,0.5);
+ }
+ update(){this.bar.width=44*(this.hp/this.maxHp);}
+ move(x,y){this.x=x;this.y=y;this.sprite.x=x*TILE+45;this.sprite.y=y*TILE+45;this.update();}
+ adj(o){return Math.abs(this.x-o.x)+Math.abs(this.y-o.y)==1;}
+ atk(t){t.hp-=(this.type==="dps"?2:1);t.update();
+  this.scene.tweens.add({targets:this.sprite,scale:1.2,yoyo:true,duration:120});
+ }
+ die(){this.sprite.destroy();this.bar.destroy();this.bg.destroy();}
+}
+
+class Menu extends Phaser.Scene{
+ create(){
+  this.add.text(110,120,"TINY TACTIX",{fontSize:"42px",color:"#fff"});
+  this.add.text(150,200,"START",{fontSize:"28px",color:"#0f0"})
+   .setInteractive().on("pointerdown",()=>this.scene.start("Game"));
+ }
+}
+
+class Game extends Phaser.Scene{
+ create(){
+  this.units=[]; turn="player"; selected=null;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+   const t=this.add.rectangle(x*TILE+45,y*TILE+45,TILE-4,TILE-4,0x2c2f5a);
+   t.setStrokeStyle(2,0xffffff);
+  }
+  const m=MAPS[mapIndex];
+  this.units.push(new Unit(this,m.player[0][0],m.player[0][1],"tank","player"));
+  this.units.push(new Unit(this,m.player[1][0],m.player[1][1],"mage","player"));
+  this.units.push(new Unit(this,m.ai[0][0],m.ai[0][1],"tank","ai"));
+  this.units.push(new Unit(this,m.ai[1][0],m.ai[1][1],"dps","ai"));
+  this.info=this.add.text(10,ROWS*TILE+8,"TURN: PLAYER",{fontSize:"20px",color:"#fff"});
+  this.input.on("pointerdown",p=>{
+   if(turn!=="player")return;
+   const x=Math.floor(p.x/TILE),y=Math.floor(p.y/TILE);
+   if(!selected){selected=this.units.find(u=>u.owner==="player");return;}
+   const e=this.units.find(u=>u.owner==="ai"&&u.x==x&&u.y==y);
+   if(e&&selected.adj(e)){selected.atk(e);if(e.hp<=0){e.die();this.units=this.units.filter(u=>u!=e);}this.end();return;}
+   selected.move(x,y);this.end();
+  });
+ }
+ end(){selected=null;turn="ai";this.info.setText("TURN: AI");
+  this.time.delayedCall(600,()=>this.ai());
+ }
+ ai(){
+  const a=this.units.filter(u=>u.owner==="ai"), p=this.units.filter(u=>u.owner==="player");
+  a.forEach(ai=>{
+   const t=p[0]; if(!t)return;
+   if(ai.adj(t)){ai.atk(t);if(t.hp<=0){t.die();this.units=this.units.filter(u=>u!=t);}}
+   else ai.move(ai.x+Math.sign(t.x-ai.x),ai.y+Math.sign(t.y-ai.y));
+  });
+  if(this.units.filter(u=>u.owner==="player").length==0){this.info.setText("AI WIN");return;}
+  if(this.units.filter(u=>u.owner==="ai").length==0){
+   this.info.setText("STAGE CLEAR"); mapIndex=(mapIndex+1)%MAPS.length;
+   this.time.delayedCall(1000,()=>this.scene.restart()); return;
+  }
+  turn="player"; this.info.setText("TURN: PLAYER");
+ }
+}
+
+new Phaser.Game({
+ type:Phaser.AUTO,
+ width:TILE*COLS,
+ height:TILE*ROWS+50,
+ backgroundColor:"#0c1022",
+ scene:[Menu,Game]
+});
+</script>
+
+</body>
+</html>

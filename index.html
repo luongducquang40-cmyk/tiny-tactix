@@ -4,218 +4,150 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Tiny Tactix</title>
+<title>Dragon Tactix</title>
 
-<!-- CDN Phaser ổn định cho iOS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #0c1022;
-  overflow: hidden;
-}
+html,body{margin:0;padding:0;background:#0c1022;overflow:hidden;}
 </style>
 </head>
-
 <body>
 
 <script>
-window.onload = function () {
+window.onload = function(){
 
-const TILE = 90;
-const COLS = 6;
-const ROWS = 4;
-let turn = "player";
-let selected = null;
-let mapIndex = 0;
+/* ===== CONFIG ===== */
+const TILE=90,COLS=6,ROWS=4;
+let turn="player",selected=null,mapIndex=0;
 
-const MAPS = [
-  { player: [[0,1],[0,2]], ai: [[5,1],[5,2]] },
-  { player: [[0,0],[0,3]], ai: [[5,0],[5,3]] },
-  { player: [[1,1],[1,2]], ai: [[4,1],[4,2]] }
+/* ===== MAP DATA ===== */
+const MAPS=[
+ {name:"Saiyan Plains",player:[[0,1],[0,2]],ai:[[5,1],[5,2]]},
+ {name:"Namek",player:[[0,0],[0,3]],ai:[[5,0],[5,3]]},
+ {name:"Hyperbolic Time",player:[[1,1],[1,2]],ai:[[4,1],[4,2]]}
 ];
 
-class Unit {
-  constructor(scene,x,y,type,owner){
-    this.scene = scene;
-    this.x = x;
-    this.y = y;
-    this.owner = owner;
-    this.type = type;
+/* ===== ASSETS ===== */
+const SPRITES={
+ goku:"https://i.imgur.com/2yaf2wb.png",
+ vegeta:"https://i.imgur.com/1X9QZ9H.png"
+};
 
-    const stats = {
-      tank: [8, 0x4dabf7],
-      dps:  [5, 0x51cf66],
-      mage: [4, 0xf06595]
-    };
+const SOUNDS={
+ click:"https://cdn.pixabay.com/audio/2022/03/15/audio_9c1e2a4c0c.mp3",
+ hit:"https://cdn.pixabay.com/audio/2022/10/03/audio_946b7e6c8e.mp3",
+ win:"https://cdn.pixabay.com/audio/2021/08/04/audio_8b61cfc4c7.mp3"
+};
 
-    this.maxHp = stats[type][0];
-    this.hp = this.maxHp;
-
-    this.sprite = scene.add.circle(
-      x*TILE+45, y*TILE+45, 30, stats[type][1]
-    );
-
-    this.hpBg = scene.add.rectangle(this.sprite.x, this.sprite.y-36, 44, 6, 0x000000);
-    this.hpBar = scene.add.rectangle(this.sprite.x-22, this.sprite.y-36, 44, 6, 0x00ff00)
-      .setOrigin(0,0.5);
-  }
-
-  updateHP(){
-    this.hpBar.width = 44 * (this.hp / this.maxHp);
-  }
-
-  move(x,y){
-    this.x = x; this.y = y;
-    this.sprite.x = x*TILE+45;
-    this.sprite.y = y*TILE+45;
-    this.hpBg.x = this.sprite.x;
-    this.hpBar.x = this.sprite.x-22;
-    this.hpBg.y = this.hpBar.y = this.sprite.y-36;
-  }
-
-  adjacent(o){
-    return Math.abs(this.x-o.x) + Math.abs(this.y-o.y) === 1;
-  }
-
-  attack(target){
-    target.hp -= (this.type === "dps" ? 2 : 1);
-    target.updateHP();
-    this.scene.tweens.add({
-      targets: this.sprite,
-      scale: 1.2,
-      yoyo: true,
-      duration: 120
-    });
-  }
-
-  destroy(){
-    this.sprite.destroy();
-    this.hpBg.destroy();
-    this.hpBar.destroy();
-  }
+/* ===== UNIT ===== */
+class Unit{
+ constructor(scene,x,y,key,owner){
+  this.scene=scene;this.x=x;this.y=y;this.owner=owner;
+  this.hp=5;this.maxHp=5;
+  this.sprite=scene.add.image(x*TILE+45,y*TILE+45,key).setScale(0.35);
+  this.bg=scene.add.rectangle(this.sprite.x,this.sprite.y-40,44,6,0x000);
+  this.bar=scene.add.rectangle(this.sprite.x-22,this.sprite.y-40,44,6,0x0f0).setOrigin(0,0.5);
+ }
+ update(){this.bar.width=44*(this.hp/this.maxHp);}
+ move(x,y){
+  this.x=x;this.y=y;
+  this.sprite.x=x*TILE+45;this.sprite.y=y*TILE+45;
+  this.bg.x=this.sprite.x;this.bar.x=this.sprite.x-22;
+  this.bg.y=this.bar.y=this.sprite.y-40;
+ }
+ adj(o){return Math.abs(this.x-o.x)+Math.abs(this.y-o.y)==1;}
+ atk(t){
+  this.scene.sound.play("hit");
+  t.hp--;t.update();
+  this.scene.tweens.add({targets:this.sprite,scale:0.42,yoyo:true,duration:120});
+ }
+ die(){this.sprite.destroy();this.bar.destroy();this.bg.destroy();}
 }
 
-class Menu extends Phaser.Scene {
-  constructor(){ super("Menu"); }
-  create(){
-    this.add.text(120,120,"TINY TACTIX",{fontSize:"40px",color:"#ffffff"});
-    this.add.text(160,200,"START",{fontSize:"28px",color:"#00ff88"})
-      .setInteractive()
-      .on("pointerdown",()=>this.scene.start("Game"));
-  }
+/* ===== MENU ===== */
+class Menu extends Phaser.Scene{
+ constructor(){super("Menu");}
+ preload(){
+  this.load.image("goku",SPRITES.goku);
+  this.load.image("vegeta",SPRITES.vegeta);
+  this.load.audio("click",SOUNDS.click);
+  this.load.audio("hit",SOUNDS.hit);
+  this.load.audio("win",SOUNDS.win);
+ }
+ create(){
+  this.add.text(90,80,"DRAGON TACTIX",{fontSize:"38px",color:"#fff"});
+  MAPS.forEach((m,i)=>{
+   this.add.text(140,160+i*50,"> "+m.name,{fontSize:"22px",color:"#00ff88"})
+    .setInteractive()
+    .on("pointerdown",()=>{
+      this.sound.play("click");
+      mapIndex=i;
+      this.scene.start("Game");
+    });
+  });
+ }
 }
 
-class Game extends Phaser.Scene {
-  constructor(){ super("Game"); }
+/* ===== GAME ===== */
+class Game extends Phaser.Scene{
+ constructor(){super("Game");}
+ create(){
+  this.units=[];turn="player";selected=null;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)
+   this.add.rectangle(x*TILE+45,y*TILE+45,TILE-4,TILE-4,0x2c2f5a).setStrokeStyle(2,0xffffff);
 
-  create(){
-    this.units = [];
-    turn = "player";
-    selected = null;
+  const m=MAPS[mapIndex];
+  this.units.push(new Unit(this,m.player[0][0],m.player[0][1],"goku","player"));
+  this.units.push(new Unit(this,m.player[1][0],m.player[1][1],"goku","player"));
+  this.units.push(new Unit(this,m.ai[0][0],m.ai[0][1],"vegeta","ai"));
+  this.units.push(new Unit(this,m.ai[1][0],m.ai[1][1],"vegeta","ai"));
 
-    for(let y=0;y<ROWS;y++){
-      for(let x=0;x<COLS;x++){
-        this.add.rectangle(
-          x*TILE+45, y*TILE+45,
-          TILE-4, TILE-4, 0x2c2f5a
-        ).setStrokeStyle(2,0xffffff);
-      }
-    }
+  this.info=this.add.text(10,ROWS*TILE+10,"TURN: PLAYER",{fontSize:"20px",color:"#fff"});
 
-    const m = MAPS[mapIndex];
-    this.units.push(new Unit(this,m.player[0][0],m.player[0][1],"tank","player"));
-    this.units.push(new Unit(this,m.player[1][0],m.player[1][1],"mage","player"));
-    this.units.push(new Unit(this,m.ai[0][0],m.ai[0][1],"tank","ai"));
-    this.units.push(new Unit(this,m.ai[1][0],m.ai[1][1],"dps","ai"));
-
-    this.info = this.add.text(10, ROWS*TILE+10, "TURN: PLAYER", {fontSize:"20px",color:"#fff"});
-
-    this.input.on("pointerdown", p => {
-      if(turn !== "player") return;
-      const x = Math.floor(p.x / TILE);
-      const y = Math.floor(p.y / TILE);
-
-      if(!selected){
-        selected = this.units.find(u=>u.owner==="player");
-        return;
-      }
-
-      const enemy = this.units.find(u=>u.owner==="ai" && u.x===x && u.y===y);
-      if(enemy && selected.adjacent(enemy)){
-        selected.attack(enemy);
-        if(enemy.hp<=0){
-          enemy.destroy();
-          this.units = this.units.filter(u=>u!==enemy);
-        }
-        this.endTurn();
-        return;
-      }
-
-      selected.move(x,y);
-      this.endTurn();
-    });
+  this.input.on("pointerdown",p=>{
+   if(turn!=="player")return;
+   const x=Math.floor(p.x/TILE),y=Math.floor(p.y/TILE);
+   if(!selected){selected=this.units.find(u=>u.owner==="player");return;}
+   const e=this.units.find(u=>u.owner==="ai"&&u.x==x&&u.y==y);
+   if(e&&selected.adj(e)){selected.atk(e);if(e.hp<=0){e.die();this.units=this.units.filter(u=>u!=e);}this.end();return;}
+   selected.move(x,y);this.end();
+  });
+ }
+ end(){
+  selected=null;turn="ai";this.info.setText("TURN: AI");
+  this.time.delayedCall(600,()=>this.ai());
+ }
+ ai(){
+  const a=this.units.filter(u=>u.owner==="ai"),p=this.units.filter(u=>u.owner==="player");
+  a.forEach(ai=>{
+   const t=p[0];if(!t)return;
+   if(ai.adj(t)){ai.atk(t);if(t.hp<=0){t.die();this.units=this.units.filter(u=>u!=t);}}
+   else ai.move(ai.x+Math.sign(t.x-ai.x),ai.y+Math.sign(t.y-ai.y));
+  });
+  if(!this.units.some(u=>u.owner==="player")){
+   this.sound.play("win");this.info.setText("YOU LOSE");return;
   }
-
-  endTurn(){
-    selected = null;
-    turn = "ai";
-    this.info.setText("TURN: AI");
-    this.time.delayedCall(600, ()=>this.aiTurn());
+  if(!this.units.some(u=>u.owner==="ai")){
+   this.sound.play("win");this.info.setText("YOU WIN");
+   this.time.delayedCall(1200,()=>this.scene.start("Menu"));return;
   }
-
-  aiTurn(){
-    const ai = this.units.filter(u=>u.owner==="ai");
-    const player = this.units.filter(u=>u.owner==="player");
-
-    ai.forEach(a=>{
-      const p = player[0];
-      if(!p) return;
-
-      if(a.adjacent(p)){
-        a.attack(p);
-        if(p.hp<=0){
-          p.destroy();
-          this.units = this.units.filter(u=>u!==p);
-        }
-      } else {
-        a.move(a.x + Math.sign(p.x-a.x), a.y + Math.sign(p.y-a.y));
-      }
-    });
-
-    if(this.units.filter(u=>u.owner==="player").length===0){
-      this.info.setText("AI WIN");
-      return;
-    }
-
-    if(this.units.filter(u=>u.owner==="ai").length===0){
-      this.info.setText("STAGE CLEAR");
-      mapIndex = (mapIndex+1) % MAPS.length;
-      this.time.delayedCall(1000, ()=>this.scene.restart());
-      return;
-    }
-
-    turn = "player";
-    this.info.setText("TURN: PLAYER");
-  }
+  turn="player";this.info.setText("TURN: PLAYER");
+ }
 }
 
+/* ===== GAME START ===== */
 new Phaser.Game({
-  type: Phaser.AUTO,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  backgroundColor: "#0c1022",
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  },
-  scene: [Menu, Game]
+ type:Phaser.AUTO,
+ width:window.innerWidth,
+ height:window.innerHeight,
+ backgroundColor:"#0c1022",
+ scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
+ scene:[Menu,Game]
 });
 
 };
 </script>
-
 </body>
 </html>
+

@@ -2,96 +2,94 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Dragon Tactix</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+<title>BrowserQuest Mini Demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-html,body{margin:0;padding:0;background:#0c1022;overflow:hidden;}
+body{margin:0;background:#222;color:white;font-family:monospace}
+#ui{position:fixed;bottom:10px;left:10px}
+canvas{display:block;margin:auto;background:#111}
 </style>
 </head>
 <body>
 
+<canvas id="game" width="320" height="240"></canvas>
+<div id="ui">Weapon: None | HP: <span id="hp">5</span></div>
+
 <script>
-window.onload = () => {
+/* ===== BASIC SETUP ===== */
+const c=document.getElementById("game");
+const ctx=c.getContext("2d");
+const tile=32;
+let hp=5,weapon=null;
 
-const TILE=90,COLS=6,ROWS=4;
-let turn="player",selected=null,mapIndex=0;
-
-const MAPS=[
- {name:"Saiyan Plains"},
- {name:"Namek"},
- {name:"Hyperbolic Time"}
+/* ===== MAP ===== */
+const map=[
+ [1,1,1,1,1,1,1,1,1,1],
+ [1,0,0,0,0,0,0,2,0,1],
+ [1,0,0,0,0,0,0,0,0,1],
+ [1,0,0,3,0,0,0,0,0,1],
+ [1,1,1,1,1,1,1,1,1,1]
 ];
+// 0=ground,1=wall,2=sword,3=potion
 
-class Menu extends Phaser.Scene{
- constructor(){super("Menu");}
- create(){
-  this.add.text(100,60,"DRAGON TACTIX",{fontSize:"36px",color:"#fff"});
+const player={x:1,y:1};
 
-  MAPS.forEach((m,i)=>{
-   const btn=this.add.rectangle(200,150+i*70,260,50,0x1f7aec)
-    .setInteractive();
-   this.add.text(120,135+i*70,m.name,{fontSize:"22px",color:"#fff"});
+/* ===== DRAW ===== */
+function draw(){
+ ctx.clearRect(0,0,c.width,c.height);
+ for(let y=0;y<map.length;y++)
+  for(let x=0;x<map[0].length;x++){
+   if(map[y][x]==1){ctx.fillStyle="#555";}
+   else ctx.fillStyle="#333";
+   ctx.fillRect(x*tile,y*tile,tile,tile);
 
-   btn.on("pointerdown",()=>{
-     mapIndex=i;
-     this.scene.start("Game");
-   });
-  });
+   if(map[y][x]==2){
+    ctx.fillStyle="gold";
+    ctx.fillRect(x*tile+10,y*tile+10,12,12);
+   }
+   if(map[y][x]==3){
+    ctx.fillStyle="red";
+    ctx.fillRect(x*tile+10,y*tile+10,12,12);
+   }
  }
+ ctx.fillStyle="cyan";
+ ctx.fillRect(player.x*tile+6,player.y*tile+6,20,20);
 }
 
-class Unit{
- constructor(scene,x,y,color,owner){
-  this.scene=scene;this.x=x;this.y=y;this.owner=owner;
-  this.hp=3;
-  this.sprite=scene.add.rectangle(x*TILE+45,y*TILE+45,50,50,color)
-   .setInteractive();
+/* ===== MOVE & ITEM ===== */
+function move(dx,dy){
+ const nx=player.x+dx,ny=player.y+dy;
+ if(map[ny][nx]==1)return;
+ if(map[ny][nx]==2){
+  weapon="Sword";
+  map[ny][nx]=0;
  }
- adj(o){return Math.abs(this.x-o.x)+Math.abs(this.y-o.y)==1;}
- move(x,y){this.x=x;this.y=y;this.sprite.setPosition(x*TILE+45,y*TILE+45);}
+ if(map[ny][nx]==3){
+  hp=Math.min(5,hp+2);
+  map[ny][nx]=0;
+ }
+ player.x=nx;player.y=ny;
+ updateUI();
 }
 
-class Game extends Phaser.Scene{
- constructor(){super("Game");}
- create(){
-  this.units=[];
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)
-   this.add.rectangle(x*TILE+45,y*TILE+45,TILE-4,TILE-4,0x2c2f5a).setStrokeStyle(2,0xffffff);
-
-  this.units.push(new Unit(this,0,1,0x00ff00,"player"));
-  this.units.push(new Unit(this,5,1,0xff0000,"ai"));
-
-  this.info=this.add.text(10,ROWS*TILE+10,"Tap YOUR unit",{fontSize:"20px",color:"#fff"});
-
-  this.input.on("gameobjectdown",(p,obj)=>{
-    const u=this.units.find(u=>u.sprite===obj);
-    if(!u || u.owner!=="player")return;
-    selected=u;
-    this.info.setText("Unit selected → tap empty tile");
-  });
-
-  this.input.on("pointerdown",p=>{
-    if(!selected)return;
-    const x=Math.floor(p.x/TILE),y=Math.floor(p.y/TILE);
-    selected.move(x,y);
-    selected=null;
-    this.info.setText("Tap YOUR unit");
-  });
- }
-}
-
-new Phaser.Game({
- type:Phaser.AUTO,
- width:window.innerWidth,
- height:window.innerHeight,
- backgroundColor:"#0c1022",
- scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
- scene:[Menu,Game]
+/* ===== INPUT ===== */
+window.addEventListener("keydown",e=>{
+ if(e.key=="ArrowUp")move(0,-1);
+ if(e.key=="ArrowDown")move(0,1);
+ if(e.key=="ArrowLeft")move(-1,0);
+ if(e.key=="ArrowRight")move(1,0);
 });
 
-};
+/* ===== UI ===== */
+function updateUI(){
+ document.getElementById("ui").innerText=
+  "Weapon: "+(weapon||"None")+" | HP: "+hp;
+}
+
+/* ===== LOOP ===== */
+function loop(){draw();requestAnimationFrame(loop);}
+updateUI();loop();
 </script>
+
 </body>
 </html>
-
